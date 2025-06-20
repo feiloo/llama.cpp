@@ -792,8 +792,7 @@ ggml_tensor * llama_kv_cache_unified::cpy_v(ggml_context * ctx, ggml_tensor * v_
             // TODO: this seems not very optimal - can we do something better?
             v_view = ggml_reshape_3d(ctx, v, 1, v->ne[1], v->ne[0]);
 
-            v_cur = ggml_cont(ctx, v_cur);
-            v_cur = ggml_reshape_3d(ctx, v_cur, 1, n_tokens, hparams.n_embd_v_gqa(il));
+            v_cur = ggml_cont_3d(ctx, v_cur, 1, v_cur->ne[0], v_cur->ne[1]);
 
             kv_idxs = ggml_repeat_4d(ctx, kv_idxs, v_cur->ne[1], v_cur->ne[2], 1, 1);
 
