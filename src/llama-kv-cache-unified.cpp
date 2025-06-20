@@ -777,23 +777,32 @@ ggml_tensor * llama_kv_cache_unified::cpy_v(ggml_context * ctx, ggml_tensor * v_
 
     if (!v_trans) {
         if (kv_idxs) {
-            return ggml_set_rows(ctx, v, ggml_reshape_2d(ctx, v_cur, v->ne[0], n_tokens), kv_idxs);
+            return ggml_set_rows(ctx, v, v_cur, kv_idxs);
         }
 
         v_view = ggml_view_1d(ctx, v,
                 n_tokens*hparams.n_embd_v_gqa(il),
                 ggml_row_size(v->type, hparams.n_embd_v_gqa(il))*head_cur);
     } else {
-        if (kv_idxs) {
-            GGML_ABORT("TODO: implement kv_idxs for transposed V cache -- for now use flash attention");
-        }
+        v_cur = ggml_transpose(ctx, v_cur);
 
         // note: the V cache is transposed when not using flash attention
+        if (kv_idxs) {
+            // the row becomes a single element and we repeat the KV indices d_head times
+            // TODO: this seems not very optimal - can we do something better?
+            v_view = ggml_reshape_3d(ctx, v, 1, v->ne[1], v->ne[0]);
+
+            v_cur = ggml_cont(ctx, v_cur);
+            v_cur = ggml_reshape_3d(ctx, v_cur, 1, n_tokens, hparams.n_embd_v_gqa(il));
+
+            kv_idxs = ggml_repeat_4d(ctx, kv_idxs, v_cur->ne[1], v_cur->ne[2], 1, 1);
+
+            return ggml_set_rows(ctx, v_view, v_cur, kv_idxs);
+        }
+
         v_view = ggml_view_2d(ctx, v, n_tokens, hparams.n_embd_v_gqa(il),
                 (v->ne[1])*ggml_element_size(v),
                 (head_cur)*ggml_element_size(v));
-
-        v_cur = ggml_transpose(ctx, v_cur);
     }
 
     return ggml_cpy(ctx, v_cur, v_view);
